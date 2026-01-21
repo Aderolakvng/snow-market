@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Order Details — Snow Market</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/external-navbar.css" />
+  <style>
+    .detail-wrap{max-width:900px;margin:40px auto;padding:0 16px}
+    .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+    .meta{display:flex;justify-content:space-between;align-items:center}
+    .items{margin-top:12px}
+    .item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0}
+    .tracking{margin-top:12px}
+    .pending-note{background:#fffbf0;border:1px solid #ffd7a6;padding:12px;border-radius:8px;margin-bottom:12px}
+    .status-badge{display:inline-block;padding:6px 10px;border-radius:999px;font-weight:700;font-size:13px}
+    .status-confirmed{background:#e6fffa;color:#05616b;border:1px solid #9fe6db}
+    .status-pending{background:#fff7ed;color:#7a3e00;border:1px solid #ffd7a6}
+  </style>
+</head>
+<body>
+  <div id="header"></div>
+  <div class="detail-wrap">
+    <h1>Order Details</h1>
+    <div id="pending-note"></div>
+    <div id="order-container"></div>
+    <div style="margin-top:14px"><a href="orders.html" class="auth-btn" style="text-decoration:none">Back to Orders</a></div>
+  </div>
+  <div id="footer"></div>
+
+  <script type="module">
+    (async function(){
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+    })();
+
+    import { auth, db } from '../js/firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
+    import { doc, getDoc, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
+
+    function esc(s){ return String(s||''); }
+    function money(k){ return `₦${(Number(k||0)/100).toFixed(2)}` }
+
+    async function renderOrderById(id){
+      try{
+        const dref = doc(db, 'orders', id);
+        const snap = await getDoc(dref);
+        if (!snap || !snap.exists()) {
+          document.getElementById('order-container').innerHTML = '<div class="card">Order not found.</div>';
+          return;
+        }
+        const o = { id: snap.id, ...snap.data() };
+        renderOrder(o);
+      }catch(e){ console.error('renderOrderById', e); document.getElementById('order-container').innerHTML = '<div class="card">Could not load order.</div>'; }
+    }
+
+    function renderOrder(o){
+      const con = document.getElementById('order-container');
+      if (!con) return;
+      const total = o.amountInKobo ? money(o.amountInKobo) : (o.total ? `₦${Number(o.total||0).toFixed(2)}` : '');
+      const items = (o.items||[]).map(it => `<div class="item"><div>${esc(it.title||it.name||'Item')}</div><div>x${Number(it.quantity||it.qty||1)}</div><div>${esc(Number(it.price||0).toFixed(2))}</div></div>`).join('');
+      const hasTracking = Array.isArray(o.trackingNumbers) && o.trackingNumbers.length;
+      const trackingHtml = hasTracking ? `<div id="tracking" class="tracking card"><strong>Tracking numbers</strong><ol>${o.trackingNumbers.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>` : '';
+
+      // Determine status: prefer explicit `o.status`, then tracking, then pending
+      let status = 'Pending';
+      let statusClass = 'status-pending';
+      if (o.status) {
+        const s = String(o.status).toLowerCase();
+        if (/deliv|delivered/.test(s)) { status = 'Delivered'; statusClass='status-delivered'; }
+        else if (/cancel|canceled|cancelled/.test(s)) { status = 'Cancelled'; statusClass='status-cancelled'; }
+        else if (/process|processing/.test(s)) { status = 'Processing'; statusClass='status-processing'; }
+        else if (/confirm|paid/.test(s)) { status = 'Confirmed'; statusClass='status-confirmed'; }
+        else { status = String(o.status); statusClass='status-processing'; }
+      } else if (hasTracking) { status = 'Confirmed'; statusClass = 'status-confirmed'; }
+      if (o.isPending) { status = 'Pending verification'; statusClass = 'status-pending'; }
+
+      const badge = `<div style="margin-top:8px"><span class="status-badge ${statusClass}">${esc(status)}</span></div>`;
+
+      con.innerHTML = `<div class="card"><div class="meta"><div><strong>Reference:</strong> ${esc(o.reference||o.id||'')}</div><div>${total}</div></div>${badge}<div style="margin-top:8px">Email: ${esc(o.email||'')}</div><div class="items">${items}</div>${trackingHtml}<div style="margin-top:10px">Created: ${esc(o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : (o.createdAt||''))}</div></div>`;
+    }
+
+    async function renderOrderByReference(ref){
+      try{
+        // try to find in Firestore
+        const q = query(collection(db, 'orders'), where('reference','==',String(ref||'')));
+        const snap = await getDocs(q);
+        if (snap && snap.size>0){
+          const d = snap.docs[0];
+          renderOrder({ id: d.id, ...d.data() });
+          return;
+        }
+
+        // fallback to localStorage last_unverified_payment
+        const raw = localStorage.getItem('last_unverified_payment');
+        if (raw){
+          try{
+            const obj = JSON.parse(raw);
+            if (obj && obj.reference === ref){
+              const pending = obj.pending || {};
+              document.getElementById('pending-note').innerHTML = `<div class="pending-note">This order is pending verification. Reference: <strong>${esc(ref)}</strong>. We will update this page once verification completes.</div>`;
+              // render the pending payload
+              const temp = { reference: obj.reference, items: (pending.items||[]), amountInKobo: pending.amountInKobo || pending.amount || 0, email: pending.email || '', trackingNumbers: pending.trackingNumbers || [], isPending: true };
+              renderOrder(temp);
+              return;
+            }
+          }catch(e){}
+        }
+
+        document.getElementById('order-container').innerHTML = '<div class="card">Order not found.</div>';
+      }catch(e){ console.error('renderOrderByReference', e); document.getElementById('order-container').innerHTML = '<div class="card">Could not load order.</div>' }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const qp = new URLSearchParams(window.location.search || '');
+      const id = qp.get('id');
+      const ref = qp.get('ref');
+
+      onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          // For pending unverified payments we still show a view, but otherwise require login to view order details
+          if (ref) {
+            renderOrderByReference(ref);
+            return;
+          }
+          window.location.href = `login.html?redirect=${encodeURIComponent('order-details.html' + (id?('?id='+id): (ref?('?ref='+ref):'')))}`;
+          return;
+        }
+
+        if (id) renderOrderById(id);
+        else if (ref) renderOrderByReference(ref);
+        else document.getElementById('order-container').innerHTML = '<div class="card">No order specified.</div>';
+      });
+    });
+  </script>
+  <script src="../js/header-links-fix.js"></script>
+  <script src="../js/asset-logger.js"></script>
+</body>
+</html>

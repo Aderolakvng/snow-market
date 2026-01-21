@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Categories — Snow Market</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-products.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+</head>
+<body>
+  <div id="header"></div>
+
+  <main class="container shop-page">
+    <section class="shop-hero">
+      <div class="shop-hero-inner">
+        <h1 class="page-title" id="catTitle">Categories</h1>
+        <p class="muted" id="catSubtitle">Browse products by category.</p>
+        <div class="shop-controls">
+          <input id="catSearch" placeholder="Search products..." />
+          <select id="sortSelect">
+            <option value="relevance">Sort: Relevance</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="products container">
+      <h2 class="section-title" id="resultsTitle">Products</h2>
+      <div class="grid-container" id="categoryGrid"></div>
+    </section>
+  </main>
+
+  <div id="footer"></div>
+
+  <script src="../js/path-utils.js"></script>
+  <script src="../js/asset-logger.js"></script>
+  <script src="../js/header-categories.js"></script>
+
+  <script type="module" src="../js/firebase.js"></script>
+  <script type="module" src="../js/auth.js"></script>
+  <script type="module" src="../js/firebase-products.js"></script>
+  <script type="module" src="../js/cart.js"></script>
+
+  <script type="module">
+    const params = new URLSearchParams(window.location.search);
+    const selectedCat = (params.get('cat') || 'All').trim();
+    const selectedSub = (params.get('sub') || '').trim();
+
+    const titleEl = document.getElementById('catTitle');
+    const subEl = document.getElementById('catSubtitle');
+    const resultsTitleEl = document.getElementById('resultsTitle');
+
+    function setTitles(count) {
+      const base = selectedCat && selectedCat !== 'All' ? selectedCat : 'All Categories';
+      const suffix = selectedSub ? ` — ${selectedSub}` : '';
+      if (titleEl) titleEl.textContent = `${base}${suffix}`;
+      if (subEl) subEl.textContent = selectedCat && selectedCat !== 'All'
+        ? `Showing ${count} product${count === 1 ? '' : 's'} in ${base}${selectedSub ? ' — ' + selectedSub : ''}.`
+        : `Showing ${count} product${count === 1 ? '' : 's'} across all categories.`;
+      if (resultsTitleEl) resultsTitleEl.textContent = 'Products';
+    }
+
+    function normalizeImg(img) {
+      const v0 = String(img || '').trim();
+      if (!v0) return '../images/products/placeholder.svg';
+      const v = v0;
+      const isRemote = /^(https?:)?\/\//i.test(v);
+      const looksLikeLocalFile = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(v);
+      if (isRemote) return v;
+      if (!looksLikeLocalFile) return '../images/products/placeholder.svg';
+      // If absolute root path, return as-is
+      if (/^\//.test(v)) return v;
+      // If already relative (starts with ../ or ./), return as-is
+      if (/^(?:\.\.|\.|\.\/)/.test(v)) return v;
+      // If we're inside /pages/, prefix ../ so images resolve to ../images/...
+      const isPages = location.pathname.includes('/pages/');
+      if (isPages) return `../${v}`;
+      return v;
+    }
+
+    async function waitForGlobal(name, timeoutMs = 7000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (typeof window[name] === 'function') return window[name];
+        await new Promise(r => setTimeout(r, 50));
+      }
+      return null;
+    }
+
+    function filterList(list, q) {
+      const ql = (q || '').toLowerCase().trim();
+      let out = Array.isArray(list) ? list.slice() : [];
+
+      const catNorm = String(selectedCat || '').trim().toLowerCase();
+      const subNorm = String(selectedSub || '').trim().toLowerCase();
+
+      if (catNorm && catNorm !== 'all') {
+        out = out.filter(p => String(p.category || p.cat || '').trim().toLowerCase() === catNorm);
+      }
+      if (subNorm) {
+        out = out.filter(p => String(p.subcategory || p.subCategory || p.sub || '').trim().toLowerCase() === subNorm);
+      }
+
+      if (ql) {
+        out = out.filter(p => {
+          const title = String(p.title || p.name || '').toLowerCase();
+          const desc = String(p.description || '').toLowerCase();
+          const cat = String(p.category || p.cat || '').toLowerCase();
+          const brand = String(p.brand || p.subcategory || '').toLowerCase();
+          const price = String(p.price ?? '').toLowerCase();
+          return title.includes(ql) || desc.includes(ql) || cat.includes(ql) || brand.includes(ql) || price.includes(ql);
+        });
+      }
+
+      const sort = (document.getElementById('sortSelect')?.value || 'relevance');
+      if (sort === 'price-asc') out.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+      if (sort === 'price-desc') out.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+
+      return out;
+    }
+
+    function renderGrid(list) {
+      const grid = document.getElementById('categoryGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      if (!list || !list.length) {
+        grid.innerHTML = '<div style="padding:24px">No products found</div>';
+        setTitles(0);
+        return;
+      }
+
+      list.forEach(p => {
+        const title = p.title || p.name || 'Product';
+        const price = Number(p.price || 0);
+        const img = window.getProductImage ? window.getProductImage(p.category, p.subcategory || p.subCategory) : normalizeImg(p.imageURL || p.image || (p.images && p.images[0]));
+
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.setAttribute('data-id', p.id || '');
+        card.innerHTML = `
+          <img src="${img}" alt="${String(title).replace(/"/g, '&quot;')}" onerror="this.onerror=null; if(window.__tryImageFallback){ window.__tryImageFallback(this); } else { this.src=(window.resolveRoot?window.resolveRoot('images/products/placeholder.svg'):'../images/products/placeholder.svg'); }" />
+          <div class="product-body">
+            <div class="product-title">${title}</div>
+            <div class="product-desc">${p.description || ''}</div>
+            <div class="product-price">₦${price.toFixed(2)}</div>
+            <button class="btn-add-cart btn" data-id="${p.id}" data-name="${String(title).replace(/"/g, '&quot;')}" data-price="${price}" data-img="${img}">Add to cart</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      setTitles(list.length);
+    }
+
+    (async function init() {
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+
+      const fetchAll = await waitForGlobal('fetchAllProducts');
+
+      let products = [];
+      if (fetchAll) products = await fetchAll();
+      else {
+        try {
+          const candidates = ['../data/products.json','data/products.json','/data/products.json'];
+
+          // tolerant JSON parser for files that might include comments
+          async function parseJsonResponse(res){
+            try{ return await res.json(); }catch(err){
+              try{ const txt = await res.text(); const cleaned = txt.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''); return JSON.parse(cleaned); }catch(e2){ throw e2; }
+            }
+          }
+
+          if (window.fetchFirstOk) {
+            const r = await window.fetchFirstOk(candidates);
+            if (r && r.ok) products = await parseJsonResponse(r);
+            else products = [];
+          } else {
+            let ok = false;
+            for (const c of candidates) {
+              try{ const r = await fetch(c); if (r && r.ok) { products = await parseJsonResponse(r); ok = true; break; } }catch(err){}
+            }
+            if (!ok) products = [];
+          }
+        } catch (e) {
+          products = [];
+        }
+      }
+
+      window.EXTERNAL_PRODUCTS_DATA = products;
+
+      try{
+        console.debug('[categories] loaded products count=', Array.isArray(products) ? products.length : 0);
+        const invalid = (Array.isArray(products) ? products.filter(p => !p || !p.id || !p.title || (typeof p.price === 'undefined' || p.price === null)) : []);
+        if (invalid.length) console.warn(`[categories] ${invalid.length} product(s) missing id/title/price — first examples:`, invalid.slice(0,5));
+      }catch(e){}
+
+      let current = filterList(products, document.getElementById('catSearch')?.value || '');
+      renderGrid(current);
+
+      document.getElementById('catSearch')?.addEventListener('input', () => {
+        current = filterList(products, document.getElementById('catSearch')?.value || '');
+        renderGrid(current);
+      });
+      document.getElementById('sortSelect')?.addEventListener('change', () => {
+        current = filterList(products, document.getElementById('catSearch')?.value || '');
+        renderGrid(current);
+      });
+
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('.btn-add-cart');
+        if (btn) {
+          e.stopPropagation();
+          const product = {
+            id: btn.getAttribute('data-id'),
+            title: btn.getAttribute('data-name'),
+            price: parseFloat(btn.getAttribute('data-price')) || 0,
+            imageURL: btn.getAttribute('data-img')
+          };
+          if (window.addToCart) window.addToCart(product);
+          return;
+        }
+
+        const card = e.target.closest && e.target.closest('.product-card');
+        if (card && !(e.target.classList && e.target.classList.contains('btn-add-cart'))) {
+          const id = card.getAttribute('data-id');
+          if (id) window.location.href = `product-details.html?id=${encodeURIComponent(id)}`;
+        }
+      });
+    })();
+  </script>
+  <script src="../js/path-utils.js"></script>
+  <script src="../js/header-links-fix.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+/* A+ Contact page styling */
+.contact-hero{background:linear-gradient(180deg,#f8ffff,#f0fbfb);border-radius:12px;padding:28px;margin-bottom:20px}
+.contact-hero-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:var(--maxw);margin:0 auto}
+.contact-hero-copy h1{font-size:28px;color:#062b3a;margin-bottom:6px}
+.contact-hero-copy .lead{color:#425b63;margin-bottom:0}
+.contact-hero-cta .btn{margin-left:8px}
+
+.contact-grid{display:grid;grid-template-columns:1fr 360px;gap:22px;max-width:var(--maxw);margin:18px auto;padding:6px}
+.contact-card{background:#fff;border-radius:12px;padding:22px;box-shadow:0 8px 28px rgba(10,20,30,0.06);border:1px solid rgba(10,20,30,0.04)}
+.contact-card h2{margin:0 0 6px 0}
+.contact-card .muted{color:#6b7780;margin-bottom:12px}
+
+.contact-form .row.two{display:flex;gap:12px}
+.field{display:block;margin-bottom:12px}
+.field span{display:block;font-weight:700;margin-bottom:8px;color:#234}
+.field input,.field textarea{width:100%;padding:12px;border-radius:10px;border:1px solid #e6eef0;background:#fafcfc;box-shadow:inset 0 2px 0 rgba(255,255,255,0.6);font-size:15px}
+.field input:focus,.field textarea:focus{outline:none;box-shadow:0 8px 20px rgba(0,128,128,0.08);border-color:var(--teal)}
+.actions{display:flex;gap:12px;align-items:center}
+.btn-primary{background:linear-gradient(90deg,var(--teal),#0b7285);color:#fff;padding:10px 18px;border-radius:10px;border:0;font-weight:800}
+.btn-ghost{background:transparent;border:1px solid rgba(10,20,30,0.06);padding:8px 14px;border-radius:8px}
+.contact-result{margin-top:12px;padding:10px;border-radius:8px;background:rgba(10,120,110,0.06);color:#064}
+
+.contact-info .info-card{background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid rgba(10,20,30,0.04);box-shadow:0 6px 18px rgba(10,20,30,0.04)}
+.contact-info .info-card h3{margin-top:0}
+.contact-list{list-style:none;padding:0;margin:12px 0 0 0}
+.contact-list li{margin-bottom:8px}
+.contact-map{max-width:var(--maxw);margin:20px auto}
+
+/* responsive */
+@media (max-width:980px){
+  .contact-hero-inner{flex-direction:column;align-items:flex-start}
+  .contact-grid{grid-template-columns:1fr;}
+  .contact-hero-cta .btn{margin-left:0;margin-top:12px}
+  .contact-form .row.two{flex-direction:column}
+}

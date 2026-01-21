@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment — Snow Market</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+  <meta name="paystack-verify-url" content="http://localhost:4242/verify-paystack">
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <style>
+    .payment-container { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .payment-summary { margin-bottom: 18px; }
+    .pay-now { width: 100%; padding: 14px; background: linear-gradient(135deg,#008b80,#0b7285); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="header"></div>
+
+  <div class="payment-container">
+    <div class="card">
+      <h2>Payment</h2>
+      <div id="payment-summary" class="payment-summary">Loading payment details...</div>
+      <div id="payment-status" style="margin-top:12px;color:#333;font-size:15px"></div>
+      <button id="pay-now-btn" class="pay-now">Pay Now</button>
+      <button id="retry-verify-btn" class="pay-now" style="display:none;background:#f0f0f0;color:#333;margin-top:8px;">Retry verification</button>
+      <p style="margin-top:14px;color:#666;font-size:14px">You will be taken to a secure card input dialog to enter your card details.</p>
+    </div>
+  </div>
+
+  <div id="footer"></div>
+
+  <script type="module">
+    // Load header and footer
+    (async function(){
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+    })();
+
+    import { auth, db } from '../js/firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
+    import { addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
+
+    const verifyUrl = (document.querySelector('meta[name="paystack-verify-url"]')?.getAttribute('content') || '').trim();
+
+    const payNowBtn = document.getElementById('pay-now-btn');
+    const retryVerifyBtn = document.getElementById('retry-verify-btn');
+    const summaryEl = document.getElementById('payment-summary');
+    const statusEl = document.getElementById('payment-status');
+
+    let pending = null;
+    let lastRef = null;
+
+    function loadPending() {
+      try {
+        const raw = localStorage.getItem('pending_payment');
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function formatAmount(kobo) {
+      return `₦${(Number(kobo||0)/100).toFixed(2)}`;
+    }
+
+    function setStatus(msg, isError) {
+      statusEl.innerHTML = msg ? String(msg) : '';
+      statusEl.style.color = isError ? '#b33' : '#333';
+    }
+
+    function renderSummary(p) {
+      if (!p) {
+        summaryEl.innerHTML = '<div style="color:#b33">No pending payment found. <a href="checkout.html">Go back to checkout</a>.</div>';
+        payNowBtn.disabled = true;
+        return;
+      }
+      const itemsHtml = (p.items||[]).map(i => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0"><div>${i.title} x${i.quantity||1}</div><div>₦${((Number(i.price)||0)*(Number(i.quantity)||1)).toFixed(2)}</div></div>`).join('');
+      summaryEl.innerHTML = `<div><strong>Order reference:</strong> ${p.reference}</div><div style="margin-top:8px">${itemsHtml}<div style="margin-top:8px;font-weight:700">Total: ${formatAmount(p.amountInKobo)}</div></div>`;
+    }
+
+    function init() {
+      pending = loadPending();
+      renderSummary(pending);
+      if (pending) {
+        // Auto-open payment dialog shortly after load
+        setTimeout(() => { startPayment(); }, 600);
+      }
+    }
+
+    async function reportFailed(reference, expectedAmount, err, originalResponse) {
+      try {
+        if (!verifyUrl) return;
+        let reportUrl = '';
+        if (verifyUrl.includes('/verify-paystack')) {
+          reportUrl = verifyUrl.replace('/verify-paystack','/report-failed-verification');
+        } else {
+          try { reportUrl = new URL(verifyUrl).origin + '/report-failed-verification'; } catch (e) { reportUrl = ''; }
+        }
+        if (!reportUrl) return;
+        await fetch(reportUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reference, expectedAmount, error: String(err && err.message ? err.message : err), originalResponse: originalResponse || null })
+        }).catch(()=>{});
+      } catch (e) { console.error('Failed to report failed verification:', e); }
+    }
+
+    async function verifyAndSave(reference, amountInKobo) {
+      if (!verifyUrl) throw new Error('missing-verify-url');
+      const res = await fetch(verifyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference, expectedAmount: amountInKobo })
+      });
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json || json.ok !== true) {
+        const msg = json && (json.message || json.error) ? (json.message || json.error) : `verify-failed-${res.status}`;
+        try { await reportFailed(reference, amountInKobo, msg, json); } catch(e) {}
+        throw new Error(msg);
+      }
+
+      // Save order to Firestore if user exists, include server-generated tracking numbers if present
+      const user = auth.currentUser;
+      const serverTracking = json && Array.isArray(json.trackingNumbers) ? json.trackingNumbers : null;
+      if (user) {
+        const totalNgn = (Number(amountInKobo) || 0) / 100;
+        await addDoc(collection(db, 'orders'), {
+          uid: user.uid,
+          email: user.email || (pending && pending.email) || '',
+          reference,
+          currency: 'NGN',
+          amountInKobo,
+          total: Number(totalNgn.toFixed(2)),
+          items: (pending && pending.items || []).map(it => ({ id: it.id||'', title: it.title||'', price: Number(it.price)||0, quantity: Number(it.quantity)||0, imageURL: it.imageURL||'' })),
+          shipping: (pending && pending.shipping) || {},
+          trackingNumbers: serverTracking || [],
+          createdAt: serverTimestamp()
+        });
+      }
+
+      // If there is a server-generated tracking list and user not logged in, store it in localStorage so the page can show it
+      if (!user && serverTracking) {
+        try { localStorage.setItem('last_tracking_numbers', JSON.stringify(serverTracking)); } catch(e){}
+      }
+
+      // Return verification payload to caller
+      return json;
+    }
+
+    // Named handlers for Paystack
+    function paystackOnClose() {
+      payNowBtn.disabled = false;
+      payNowBtn.textContent = 'Pay Now';
+      setStatus('Payment dialog was closed. You can try again or go back to checkout.', true);
+    }
+
+    function paystackCallback(response) {
+      // Use an async IIFE so the top-level function is a plain (non-async) function
+      (async function() {
+        try {
+          const ref = (response && response.reference) ? String(response.reference) : String(pending.reference);
+          localStorage.setItem('last_paystack_reference', ref);
+          setStatus('Verifying payment...', false);
+          payNowBtn.textContent = 'Verifying payment...';
+
+          const verifyJson = await verifyAndSave(ref, pending.amountInKobo);
+
+          // Clear cart and pending payment
+          localStorage.removeItem('cart');
+          localStorage.removeItem('pending_payment');
+
+          setStatus('Payment successful! A confirmation email with tracking numbers has been sent (if an email was available). Redirecting...', false);
+          alert('Payment successful! Your order has been placed. A confirmation email has been sent if we have your email address.');
+
+          // Redirect immediately to Orders page
+          window.location.href = 'orders.html';
+        } catch (err) {
+          console.error('Post-payment error:', err);
+          // Record failed verification locally and redirect to Orders page (verification pending)
+          setStatus('Payment verification failed. Redirecting to Orders page; verification pending. Reference: ' + ((response && response.reference) || lastRef || ''), true);
+          try {
+            const ref = (response && response.reference) ? String(response.reference) : String(pending && pending.reference || '');
+            localStorage.setItem('last_unverified_payment', JSON.stringify({ reference: ref, pending: pending || null }));
+            // Clear cart and pending payment so user sees fresh state on Orders page
+            localStorage.removeItem('cart');
+            localStorage.removeItem('pending_payment');
+          } catch (e) { console.error('Could not persist unverified payment:', e); }
+
+          // Redirect after a short delay so the user sees the message
+          setTimeout(() => {
+            const ref = (response && response.reference) ? String(response.reference) : String(lastRef || '');
+            window.location.href = 'orders.html?verify=pending&ref=' + encodeURIComponent(ref);
+          }, 1200);
+        }
+      })();
+    }
+
+    async function startPayment() {
+      if (!pending) return;
+      lastRef = pending.reference;
+      payNowBtn.disabled = true;
+      setStatus('Opening secure card dialog...', false);
+      payNowBtn.textContent = 'Opening payment...';
+
+      try {
+        if (!window.PaystackPop) throw new Error('paystack-not-loaded');
+
+        const paystackKey = 'pk_test_cf90213d569e6ca64e54c7ca663d6d9d1099031e';
+        console.debug('Paystack callback type:', typeof paystackCallback, 'onClose type:', typeof paystackOnClose);
+        const handler = window.PaystackPop.setup({
+          key: paystackKey,
+          email: pending.email || '',
+          amount: pending.amountInKobo,
+          ref: pending.reference,
+          metadata: {
+            custom_fields: [
+              { display_name: 'Customer', variable_name: 'customer', value: `${(pending.shipping && pending.shipping.firstName)||''} ${(pending.shipping && pending.shipping.lastName)||''}`.trim() },
+              { display_name: 'Phone', variable_name: 'phone', value: (pending.shipping && pending.shipping.phone) || '' }
+            ]
+          },
+          onClose: function() { paystackOnClose(); },
+          callback: function(response) { try { paystackCallback(response); } catch(e) { console.error('Wrapped callback error', e); } }
+        });
+
+        handler.openIframe();
+      } catch (err) {
+        console.error('Payment init error:', err);
+        if (String(err && err.message) === 'paystack-not-loaded') {
+          setStatus('Payment system failed to load. Please refresh the page or try again later.', true);
+        } else {
+          setStatus('There was an error starting payment. Please try again or contact support.', true);
+        }
+        payNowBtn.disabled = false;
+        payNowBtn.textContent = 'Pay Now';
+      }
+    }
+
+    payNowBtn.addEventListener('click', startPayment);
+
+    retryVerifyBtn.addEventListener('click', async () => {
+      if (!lastRef || !pending) return;
+      retryVerifyBtn.disabled = true;
+      setStatus('Retrying verification...', false);
+      try {
+        await verifyAndSave(lastRef, pending.amountInKobo);
+        // success
+        localStorage.removeItem('cart');
+        localStorage.removeItem('pending_payment');
+        setStatus('Payment successful! Redirecting...', false);
+        window.location.href = 'orders.html';
+      } catch (err) {
+        console.error('Retry verification failed:', err);
+        setStatus('Verification still failed. We have reported this for manual follow-up. Please contact support with your reference: ' + (lastRef||''), true);
+      } finally {
+        retryVerifyBtn.disabled = false;
+      }
+    });
+
+    // Note for diagnostics: Datadog may log a harmless 'No storage available for session' message in some environments.
+    console.info('Note: If you see "Datadog Browser SDK: No storage available for session" this is a non-fatal analytics warning and does not affect payment processing.');
+
+    // Initialize
+    init();
+
+    // Optional: if user navigates here and is not logged in, still allow paying with provided email
+    onAuthStateChanged(auth, () => {});
+  </script>
+  <script src="../js/header-links-fix.js"></script>
+  <script src="../js/asset-logger.js"></script>
+</body>
+</html>

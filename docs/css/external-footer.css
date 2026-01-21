@@ -1,0 +1,22 @@
+/* A+ footer styles */
+.footer-a-plus{background:linear-gradient(180deg,#f8ffff,#f3fbfb);padding:36px 0;border-top:1px solid rgba(10,20,30,0.04)}
+.footer-flex{display:grid;grid-template-columns:1fr 1fr 1fr 360px;gap:24px;align-items:start;max-width:var(--maxw);margin:0 auto;padding:0 18px}
+.footer-brand{display:flex;flex-direction:column;gap:8px}
+.footer-logo{width:120px;height:auto}
+.footer-brand .muted{color:#6b7780}
+.socials{display:flex;gap:8px;margin-top:6px}
+.social{display:inline-block;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid rgba(10,20,30,0.04);text-decoration:none;color:#0b7285;font-weight:700}
+.footer-links h4{margin-bottom:8px}
+.footer-links ul{list-style:none;padding:0;margin:0}
+.footer-links li{margin-bottom:8px}
+.footer-links a{color:#234;text-decoration:none}
+.footer-newsletter h4{margin-bottom:6px}
+.newsletter-form{display:flex;gap:8px;margin-top:8px}
+.newsletter-form input[type='email']{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(10,20,30,0.06)}
+.newsletter-form button{padding:10px 14px;border-radius:8px}
+.footer-bottom{margin-top:22px;text-align:center;color:#6b7780;padding-top:12px;border-top:1px solid rgba(10,20,30,0.04)}
+@media (max-width:980px){.footer-flex{grid-template-columns:1fr;}.footer-newsletter{order:3}}
+
+/* legacy scroller (kept) */
+.external-ui .scroll-track-inner{display:flex;gap:12px;animation:scroll-left 28s linear infinite}
+@keyframes scroll-left{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}

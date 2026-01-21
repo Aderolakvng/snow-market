@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Snow Market</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+</head>
+<body class="auth-page">
+
+  <div id="header"></div>
+
+  <div class="auth-container">
+    <h1>Login to Your Account</h1>
+
+    <div id="error-message" class="error-message" style="display: none;"></div>
+    <div id="success-message" class="success-message" style="display: none;"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="checkbox" id="toggle-password-visibility" aria-controls="password">
+          Show password
+        </label>
+      </div>
+
+      <button type="submit" class="auth-btn">Login</button>
+    </form>
+
+    <div class="auth-links">
+      <p>Don't have an account? <a id="signup-link" href="signup.html">Sign up here</a></p>
+      <p><a href="../index.html">← Back to Home</a></p>
+    </div>
+  </div>
+
+  <div id="footer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+  <script type="module" src="../js/firebase.js"></script>
+  <script type="module" src="../js/auth.js"></script>
+  <script type="module">
+    // Load header and footer
+    (async function(){
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+    })();
+
+    // Check if user is already logged in
+    import { auth } from '../js/firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirect = urlParams.get('redirect') || '';
+    const signupLink = document.getElementById('signup-link');
+    if (signupLink && redirect) signupLink.href = `signup.html?redirect=${encodeURIComponent(redirect)}`;
+
+    const togglePw = document.getElementById('toggle-password-visibility');
+    const pwInput = document.getElementById('password');
+    if (togglePw && pwInput) {
+      togglePw.addEventListener('change', () => {
+        pwInput.type = togglePw.checked ? 'text' : 'password';
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const otpPending = sessionStorage.getItem(`login_otp:${String(user.uid || '')}`);
+        if (otpPending) return;
+        const redirect = urlParams.get('redirect') || '../pages/checkout.html';
+        window.location.href = redirect;
+      }
+    });
+  </script>
+  <script src="../js/header-links-fix.js"></script>
+  <script src="../js/asset-logger.js"></script>
+</body>
+</html>

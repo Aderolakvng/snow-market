@@ -1,0 +1,61 @@
+/* =========================================================
+   RESPONSIVE — GRID & HEADER
+   ========================================================= */
+
+/* TABLETS — 992px */
+@media (max-width: 992px) {
+  .grid-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .header {
+    padding: 15px 30px;
+  }
+}
+
+/* MOBILE — 768px */
+@media (max-width: 768px) {
+  .grid-container {
+    grid-template-columns: repeat(1, 1fr);
+  }
+
+  .nav ul {
+    gap: 12px;
+  }
+
+  .hero h1 {
+    font-size: 36px;
+  }
+}
+
+/* SMALL MOBILE — 480px */
+@media (max-width: 480px) {
+  .grid-container {
+    grid-template-columns: repeat(1, 1fr);
+    gap: 14px;
+    width: 96%;
+  }
+
+  .product-card img { height: 160px; }
+
+  .hero {
+    height: 260px;
+  }
+
+  .hero h1 {
+    font-size: 28px;
+  }
+
+  .header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nav ul {
+    margin-top: 10px;
+  }
+
+  /* ensure nav toggle visible and nav links usable */
+  #menuToggle{display:inline-flex}
+  .nav{display:none}
+  .nav.show-nav{display:flex}
+}

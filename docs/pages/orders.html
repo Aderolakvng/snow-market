@@ -1,0 +1,109 @@
+
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+   <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+   <title>Orders — Snow Market</title>
+   <link rel="stylesheet" href="../css/style.css" />
+   <link rel="stylesheet" href="../css/auth.css" />
+   <link rel="stylesheet" href="../css/external-navbar.css" />
+   <link rel="stylesheet" href="../css/external-footer.css" />
+   <style>
+     .orders-wrap{max-width: 900px;margin: 40px auto;padding: 0 16px;}
+     .order-card{background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);padding:16px;margin-bottom:14px;}
+     .order-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
+     .order-title{font-weight:800;color:#072634;}
+     .order-sub{color:#6b7280;font-size:13px;margin-top:4px;word-break:break-all;}
+     .order-meta{text-align:right;}
+     .order-total{font-weight:900;color:#008b80;}
+     .order-date{color:#6b7280;font-size:13px;margin-top:4px;}
+     .order-items{margin-top:12px;border-top:1px solid #f0f0f0;padding-top:10px;}
+     .order-item{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #f7f7f7;}
+     .loading,.empty{padding:16px;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+   </style>
+ </head>
+ <body>
+   <div id="header"></div>
+
+   <div class="orders-wrap">
+     <h1 style="margin: 0 0 14px; color:#072634;">Your Orders</h1>
+     <div id="orders-list"></div>
+     <div style="margin-top: 14px;">
+       <a href="profile.html" class="auth-btn" style="display:inline-block; text-decoration:none;">Back to Profile</a>
+     </div>
+   </div>
+
+   <div id="footer"></div>
+
+   <script type="module" src="../js/firebase.js"></script>
+   <script type="module" src="../js/auth.js"></script>
+   <script type="module" src="../js/orders-page.js"></script>
+  <script type="module">
+    (async function(){
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+
+      // Show a verification-pending banner if payment verification failed or is pending
+      function showPendingVerification(ref, pending) {
+        try {
+          const wrap = document.querySelector('.orders-wrap');
+          if (!wrap) return;
+          // Avoid duplicating banner
+          if (document.getElementById('payment-pending-banner')) return;
+
+          const banner = document.createElement('div');
+          banner.id = 'payment-pending-banner';
+          banner.style.cssText = 'background:#fffbf0;border:1px solid #ffd7a6;padding:12px;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;';
+
+          const left = document.createElement('div');
+          left.innerHTML = `<div style="font-weight:700;color:#7a3e00">Payment Pending Verification</div><div style="margin-top:6px;color:#444">Your payment is pending verification — reference <code>${String(ref||'')}</code>. We will update this order once verification completes. If you need help, contact support and provide the reference.</div>`;
+
+          const right = document.createElement('div');
+          const viewBtn = document.createElement('a');
+          viewBtn.textContent = 'View order';
+          viewBtn.href = 'order-details.html?ref=' + encodeURIComponent(String(ref||''));
+          viewBtn.className = 'auth-btn';
+          viewBtn.style.cssText = 'margin-right:8px;text-decoration:none;';
+
+          const dismiss = document.createElement('button');
+          dismiss.textContent = 'Dismiss';
+          dismiss.className = 'auth-btn';
+          dismiss.style.cssText = 'background:#fff;border:1px solid #ccc;color:#333;padding:6px 10px;border-radius:6px;';
+          dismiss.addEventListener('click', () => {
+            try { localStorage.removeItem('last_unverified_payment'); } catch(e){}
+            banner.remove();
+          });
+          right.appendChild(viewBtn);
+          right.appendChild(dismiss);
+
+          banner.appendChild(left);
+          banner.appendChild(right);
+          wrap.insertBefore(banner, wrap.firstChild);
+        } catch (e) { console.error('showPendingVerification error', e); }
+      }
+
+      try {
+        const qp = new URLSearchParams(window.location.search || '');
+        if (qp.get('verify') === 'pending') {
+          const ref = qp.get('ref') || '';
+          showPendingVerification(ref, null);
+        } else {
+          const raw = localStorage.getItem('last_unverified_payment');
+          if (raw) {
+            try {
+              const obj = JSON.parse(raw);
+              if (obj && obj.reference) showPendingVerification(obj.reference, obj.pending || null);
+            } catch (e) { /* ignore parse error */ }
+          }
+        }
+      } catch (e) { console.error('pending check failed', e); }
+
+    })();
+  </script>
+   <script src="../js/header-links-fix.js"></script>
+   <script src="../js/asset-logger.js"></script>
+ </body>
+ </html>

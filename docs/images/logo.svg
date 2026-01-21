@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40" role="img" aria-labelledby="logoTitle">
+  <title id="logoTitle">Snow Market</title>
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1">
+      <stop offset="0" stop-color="#00b4b0"/>
+      <stop offset="1" stop-color="#0b7285"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" fill-rule="evenodd">
+    <g transform="translate(0,4)">
+      <!-- snowflake mark -->
+      <g transform="translate(8,0) scale(0.9)" fill="url(#g1)">
+        <path d="M12 0l1.7 4.2L18 6l-4 2 1 4-4-2-4 2 1-4-4-2 4.3-1.8L12 0z"/>
+      </g>
+      <!-- wordmark -->
+      <text x="48" y="22" font-family="Poppins, sans-serif" font-weight="800" font-size="20" fill="#062b3a">Snow</text>
+      <text x="98" y="22" font-family="Poppins, sans-serif" font-weight="600" font-size="20" fill="#0b7285">Market</text>
+    </g>
+  </g>
+</svg>

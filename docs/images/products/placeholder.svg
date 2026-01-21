@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="placeholder">
+  <rect width="160" height="160" fill="#f3faf9"/>
+  <g fill="#d6eeec">
+    <circle cx="40" cy="40" r="28"/>
+    <circle cx="120" cy="40" r="28"/>
+    <circle cx="80" cy="120" r="28"/>
+  </g>
+  <text x="50%" y="50%" font-family="Poppins, sans-serif" font-size="12" fill="#6b7780" text-anchor="middle" dy="4">No image</text>
+</svg>

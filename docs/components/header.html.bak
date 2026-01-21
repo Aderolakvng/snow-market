@@ -1,0 +1,56 @@
+
+<header class="header">
+  <div class="container header-flex">
+
+    <!-- Logo -->
+    <div class="logo" aria-label="Snow Market">
+      <a href="index.html" class="logo-link">
+        <img id="siteLogo" src="images/logo.png" alt="Snow Market" class="site-logo-img"/>
+        <span class="site-text">Snow Market</span>
+      </a>
+    </div>
+
+    <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle" id="menuToggle">
+      ☰
+    </button>
+
+    <!-- Navigation -->
+    <div class="main-header">
+
+    <!-- Navigation -->
+    <nav>
+        <ul id="navMenu">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="pages/shop.html">Shop</a></li>
+            <li class="nav-categories has-dropdown">
+                <button type="button" class="nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="categories-menu">Categories ▾</button>
+                <div id="categories-menu" class="nav-dropdown" role="menu" aria-label="Categories menu">
+                  <div class="nav-dropdown-inner">
+                    <div class="dropdown-loading">Loading categories…</div>
+                  </div>
+                </div>
+            </li>
+            <li><a href="pages/contact.html">Contact</a></li>
+
+            <!-- NEW CUSTOMER SERVICE LINK -->
+            <li><a href="pages/customer-service.html">Customer Service</a></li>
+
+            <li class="cart-li">
+                <a id="cart-link" class="cart-link" href="pages/cart.html" aria-label="View cart" title="View cart">
+                    <!-- Inline SVG cart icon for crisp scalable rendering -->
+                    <svg id="cart-img" width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M7 4h-2l-1 2H1v2h2l3.6 7.59A2 2 0 0 0 7.5 18h9a2 2 0 0 0 1.9-1.35L22 8H6.5L5.2 5H7z"></path>
+                        <circle cx="10" cy="20" r="1.4" fill="currentColor"></circle>
+                        <circle cx="18" cy="20" r="1.4" fill="currentColor"></circle>
+                    </svg>
+                    <span class="cart-count" id="cartCount">0</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+</div>
+
+  </div>
+</header>

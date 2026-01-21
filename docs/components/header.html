@@ -1,0 +1,103 @@
+
+<header class="header">
+  <div class="container header-flex">
+
+    <!-- Logo -->
+    <div class="logo">
+      <a href="index.html">Snow Market</a>
+    </div>
+
+    <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle" id="menuToggle">
+      ☰
+    </button>
+
+    <!-- Navigation -->
+    <div class="main-header">
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <ul id="navMenu">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="pages/shop.html">Shop</a></li>
+            <li class="nav-categories has-dropdown">
+                <a class="nav-categories-link" href="pages/categories.html">Categories</a>
+                <button type="button" class="nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="categories-menu" aria-label="Open categories menu">▾</button>
+                <div id="categories-menu" class="nav-dropdown" role="menu" aria-label="Categories menu">
+                  <div class="nav-dropdown-inner">
+                    <div class="dropdown-loading">Loading categories…</div>
+                  </div>
+                </div>
+            </li>
+            <li><a href="pages/contact.html">Contact</a></li>
+
+            <!-- NEW CUSTOMER SERVICE LINK -->
+            <li><a href="pages/customer-service.html">Customer Service</a></li>
+
+            <li id="nav-orders-li" style="display:none;"><a id="nav-orders-link" href="pages/orders.html">Orders</a></li>
+
+            <li id="nav-profile-li" style="display:none;">
+                <a id="nav-profile-link" href="pages/profile.html" aria-label="Profile" title="Profile" style="display:inline-flex;align-items:center;gap:8px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2-8 4.5V21h16v-2.5C20 16 16.42 14 12 14Z"/>
+                    </svg>
+                    <span id="nav-profile-name" style="font-weight:600; font-size:14px; max-width: 160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                </a>
+            </li>
+
+            <li id="nav-login-li"><a id="nav-login-link" href="pages/login.html">Login</a></li>
+            <li id="nav-signup-li"><a id="nav-signup-link" href="pages/signup.html">Sign Up</a></li>
+            <li id="nav-logout-li" style="display:none;"><a id="nav-logout-link" href="index.html">Logout</a></li>
+
+            <li class="cart-li">
+                <a id="cart-link" class="cart-link" href="pages/cart.html" aria-label="View cart" title="View cart">
+                    <!-- Inline SVG cart icon for crisp scalable rendering -->
+                    <svg id="cart-img" width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M7 4h-2l-1 2H1v2h2l3.6 7.59A2 2 0 0 0 7.5 18h9a2 2 0 0 0 1.9-1.35L22 8H6.5L5.2 5H7z"></path>
+                        <circle cx="10" cy="20" r="1.4" fill="currentColor"></circle>
+                        <circle cx="18" cy="20" r="1.4" fill="currentColor"></circle>
+                    </svg>
+                    <span class="cart-count" id="cartCount" aria-hidden="true"></span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+</div>
+
+  </div>
+</header>
+
+<!-- Global loader injected by header: visible during long-running network operations -->
+<div id="global-loader" class="global-loader" aria-hidden="true" role="status">
+  <div class="loader-box" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="loader-msg">Loading…</div>
+    <div class="loader-sub">Please wait a moment</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  try{
+    // If a loader script is already loaded, skip dynamically adding script tag
+    if (window.__globalLoaderInitialized) return; window.__globalLoaderInitialized = true;
+
+    // Ensure the loader element exists (in case header is injected before body content)
+    if (!document.getElementById('global-loader')){
+      const wrapper = document.createElement('div'); wrapper.innerHTML = `<div id="global-loader" class="global-loader" aria-hidden="true" role="status"><div class="loader-box" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><div class="loader-msg">Loading…</div><div class="loader-sub">Please wait a moment</div></div></div>`;
+      try{ document.body.appendChild(wrapper.firstElementChild); }catch(e){ document.documentElement.appendChild(wrapper.firstElementChild); }
+    }
+
+    // Try to load `js/loader.js` from a set of candidate paths relative to current page
+    const candidates = ['js/loader.js','../js/loader.js','/js/loader.js'];
+    (function tryLoad(i){
+      if (i>=candidates.length) return;
+      const s = document.createElement('script'); s.src = candidates[i]; s.async = true;
+      s.onload = function(){ console.debug('[loader] loaded', candidates[i]); };
+      s.onerror = function(){ tryLoad(i+1); };
+      document.head.appendChild(s);
+    })(0);
+  }catch(e){ console.warn('Loader init failed', e); }
+})();
+</script>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snow Market — Product Details</title>
+
+  <!-- Global Styles -->
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <!-- Header & Product page specific styles -->
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-products.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <div id="header"></div>
+
+  <!-- Popup -->
+  <div id="cart-popup" style="display:none;">Item Added to Cart</div>
+
+  <!-- MAIN PRODUCT CONTENT -->
+  <section id="product-container"></section>
+
+  <!-- FOOTER -->
+  <div id="footer"></div>
+
+  <script src="../js/cart.js"></script>
+  <script type="module" src="../js/auth.js"></script>
+<script type="module" src="../js/product.js"></script>
+
+
+
+  <!-- LOAD HEADER + FOOTER -->
+  <script>
+      // Ensure path utils are available for subpath resolution
+      (function(){
+        if (!window.resolveRoot) {
+          var s = document.createElement('script');
+          s.src = '../js/path-utils.js';
+          document.head.appendChild(s);
+        }
+        // load asset logger for diagnostics when path-utils is available
+        if (!window.__assetLoggerLoaded) {
+          var s2 = document.createElement('script');
+          s2.src = '../js/asset-logger.js';
+          document.head.appendChild(s2);
+          window.__assetLoggerLoaded = true;
+        }
+      })();
+    fetch("../components/header.html")
+      .then(res => res.text())
+      .then(data => {
+        document.getElementById("header").innerHTML = data;
+        (async function fixHeaderPaths(){
+          const cartLink = document.getElementById('cart-link');
+          const cartImg = document.getElementById('cart-img');
+
+            async function pickExisting(candidates){
+              for (const c of candidates) {
+                const candidate = window.resolveRoot ? window.resolveRoot(c) : c;
+                try {
+                  const res = await fetch(candidate, {method: 'HEAD'});
+                  if (res && res.ok) return candidate;
+                } catch (e) {
+                  try { const r2 = await fetch(candidate); if (r2 && r2.ok) return candidate;} catch(e2){}
+                }
+              }
+              return window.resolveRoot ? window.resolveRoot(candidates[0]) : candidates[0];
+            }
+
+          if (cartLink) {
+            const href = await pickExisting(['cart.html','pages/cart.html','/pages/cart.html','/cart.html']);
+            cartLink.href = href;
+          }
+
+          if (cartImg) {
+            const src = await pickExisting(['../images/products/placeholder.svg','../images/products/placeholder.jpg','images/products/placeholder.svg','images/products/placeholder.jpg','/images/products/placeholder.svg','/images/products/placeholder.jpg']);
+            cartImg.src = src;
+          }
+          // fix nav links and update badge
+          const nav = document.getElementById('navMenu');
+          if (nav) {
+            const links = nav.querySelectorAll('a');
+            for (const a of links) {
+              const text = (a.textContent || a.innerText || '').trim().toLowerCase();
+              let candidates = [];
+              if (text.startsWith('home')) candidates = ['index.html','../index.html','/index.html'];
+              else if (text.startsWith('shop')) candidates = ['pages/shop.html','../pages/shop.html','shop.html','/pages/shop.html'];
+              else if (text.startsWith('categories')) candidates = ['pages/categories.html','../pages/categories.html','categories.html','/pages/categories.html'];
+              else if (text.startsWith('contact')) candidates = ['pages/contact.html','../pages/contact.html','contact.html','/pages/contact.html'];
+              if (candidates.length) pickExisting(candidates).then(found => { a.href = found; });
+            }
+          }
+
+          if (window.updateCartCount) window.updateCartCount();
+        })();
+      });
+
+    fetch("../components/footer.html")
+      .then(res => res.text())
+      .then(async (data) => {
+        document.getElementById("footer").innerHTML = data;
+        // fix footer logo path and footer links so they resolve correctly from pages/*
+        try{
+          const footer = document.getElementById('footer');
+          if (!footer) return;
+          const candidates = ['images/logo.svg','../images/logo.svg','/images/logo.svg','images/logo.png','../images/logo.png'];
+          async function pickExisting(cands){
+            for (const c of cands){
+              const candidate = c;
+              try{ const r = await fetch(candidate, { method: 'HEAD' }); if (r && r.ok) return candidate; }catch(e){ try{ const r2 = await fetch(candidate); if (r2 && r2.ok) return candidate; }catch(e2){} }
+            }
+            return candidates[0];
+          }
+          const logoImg = footer.querySelector('.footer-logo');
+          if (logoImg){ const src = await pickExisting(candidates); logoImg.src = src; }
+          // ensure footer links point to working page candidates (handles pages/* and root installs)
+          const footerLinks = footer.querySelectorAll('a');
+          for (const a of footerLinks) {
+            const txt = (a.textContent||'').trim().toLowerCase();
+            let cands = null;
+            if (txt.includes('products') || txt.includes('all products')) cands = ['pages/shop.html','shop.html','../shop.html','../pages/shop.html','/pages/shop.html','/shop.html'];
+            else if (txt.includes('categories')) cands = ['pages/categories.html','categories.html','../categories.html','../pages/categories.html','/pages/categories.html','/categories.html'];
+            else if (txt.includes('contact')) cands = ['pages/contact.html','contact.html','../contact.html','../pages/contact.html','/pages/contact.html','/contact.html'];
+            else if (txt.includes('terms')) cands = ['pages/terms.html','terms.html','../terms.html','../pages/terms.html','/pages/terms.html','/terms.html'];
+            else if (txt.includes('privacy')) cands = ['pages/privacy.html','privacy.html','../privacy.html','../pages/privacy.html','/pages/privacy.html','/privacy.html'];
+            if (cands) pickExisting(cands).then(found => { a.href = found; });
+          }
+        }catch(e){ console.warn('[footer] path fix failed', e); }
+      });
+  </script>
+  <script src="../js/header-links-fix.js"></script>
+
+</body>
+</html>

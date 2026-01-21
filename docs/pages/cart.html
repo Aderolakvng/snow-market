@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopping Cart — Snow Market</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <!-- External component CSS (navbar/footer) -->
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+
+  </head>
+
+<body>
+
+  <!-- HEADER (Reusable) -->
+  <div id="header-component"></div>
+
+  <div class="cart-container">
+    <h1 class="cart-title">Your Cart</h1>
+    <p style="margin-top:6px;"><a id="back-home" class="btn" href="../index.html">← Back to Home</a></p>
+
+    <!-- CART TABLE -->
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Name</th>
+          <th>Price</th>
+          <th>Quantity</th>
+          <th>Remove</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+
+      <tbody id="cart-table-body">
+        <!-- Dynamic rows inserted by cart.js -->
+      </tbody>
+    </table>
+
+    <!-- SUMMARY -->
+    <div class="cart-summary">
+      <div class="cart-summary-box">
+        <h2>Cart Total</h2>
+        <p id="cart-total-price" style="font-size: 1.4rem; font-weight: 700;">₦0.00</p>
+        <button class="checkout-btn">Proceed to Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Popup -->
+  <div id="cart-popup">Item added to cart!</div>
+
+  <!-- FOOTER -->
+  <div id="footer-component"></div>
+
+  <!-- Initialize Firebase (use shared module) -->
+  <script type="module" src="../js/firebase.js"></script>
+  <script type="module" src="../js/auth.js"></script>
+
+  <!-- Cart Logic -->
+  <script type="module" src="../js/cart.js"></script>
+
+  <!-- Path utilities: compute APP_BASE and resolve root-relative URLs -->
+  <script src="../js/path-utils.js"></script>
+  <script src="../js/asset-logger.js"></script>
+  <script src="../js/header-categories.js"></script>
+
+
+  <!-- Load reusable header/footer -->
+  <script>
+    fetch("../components/header.html")
+      .then(res => res.text())
+        .then(html => {
+        document.getElementById("header-component").innerHTML = html;
+        (async function fixHeaderPaths(){
+          const cartLink = document.getElementById('cart-link');
+          const cartImg = document.getElementById('cart-img');
+
+          async function pickExisting(candidates){
+            for (const c of candidates) {
+              const candidate = window.resolveRoot ? window.resolveRoot(c) : c;
+              try {
+                const res = await fetch(candidate, {method: 'HEAD'});
+                if (res && res.ok) return candidate;
+              } catch (e) {
+                try { const r2 = await fetch(candidate); if (r2 && r2.ok) return candidate;} catch(e2){}
+              }
+            }
+            return window.resolveRoot ? window.resolveRoot(candidates[0]) : candidates[0];
+          }
+
+          if (cartLink) {
+            const href = await pickExisting(['cart.html','pages/cart.html','/pages/cart.html','/cart.html']);
+            cartLink.href = href;
+          }
+
+          if (cartImg) {
+            const src = await pickExisting(['../images/products/placeholder.svg','../images/products/placeholder.jpg','images/products/placeholder.svg','images/products/placeholder.jpg','/images/products/placeholder.svg','/images/products/placeholder.jpg']);
+            // only set 'src' for <img> elements (SVGs use inline markup and do not have src)
+            if (cartImg.tagName && cartImg.tagName.toLowerCase() === 'img') {
+              cartImg.src = src;
+            }
+          }
+          // fix nav links and update badge
+          const nav = document.getElementById('navMenu');
+          if (nav) {
+            const links = nav.querySelectorAll('a');
+            for (const a of links) {
+              const text = (a.textContent || a.innerText || '').trim().toLowerCase();
+              let candidates = [];
+              if (text.startsWith('home')) candidates = ['index.html','../index.html','/index.html','/pages/index.html'];
+              else if (text.startsWith('shop')) candidates = ['pages/shop.html','shop.html','../pages/shop.html','../shop.html','/pages/shop.html'];
+              else if (text.startsWith('categories')) candidates = ['pages/categories.html','categories.html','../pages/categories.html','../categories.html','/pages/categories.html'];
+              else if (text.startsWith('contact')) candidates = ['pages/contact.html','contact.html','../pages/contact.html','../contact.html','/pages/contact.html'];
+              if (candidates.length) pickExisting(candidates).then(found => { a.href = found; });
+            }
+          }
+
+          // fix any explicit back-home link (page-specific)
+          const back = document.getElementById('back-home');
+          if (back) {
+            back.href = window.resolveRoot ? window.resolveRoot('index.html') : '../index.html';
+          }
+
+          if (window.updateCartCount) window.updateCartCount();
+        })();
+      });
+
+    fetch("../components/footer.html")
+      .then(res => res.text())
+      .then(async (data) => {
+        document.getElementById("footer-component").innerHTML = data;
+        // fix footer paths and links for pages/* context
+        try{
+          const footer = document.getElementById('footer-component');
+          if (!footer) return;
+          const candidates = ['images/logo.svg','../images/logo.svg','/images/logo.svg','images/logo.png','../images/logo.png'];
+          async function pickExistingFoot(cands){
+            for (const c of cands){
+              const candidate = window.resolveRoot ? window.resolveRoot(c) : c;
+              try{ const r = await fetch(candidate, { method: 'HEAD' }); if (r && r.ok) return candidate; }catch(e){ try{ const r2 = await fetch(candidate); if (r2 && r2.ok) return candidate; }catch(e2){} }
+            }
+            return window.resolveRoot ? window.resolveRoot(cands[0]) : cands[0];
+          }
+          const logoImg = footer.querySelector('.footer-logo');
+          if (logoImg){ const src = await pickExistingFoot(candidates); logoImg.src = src; }
+
+          const footerLinks = footer.querySelectorAll('a');
+          for (const a of footerLinks) {
+            const txt = (a.textContent||'').trim().toLowerCase();
+            let cands = null;
+            if (txt.includes('products') || txt.includes('all products')) cands = ['pages/shop.html','shop.html','../shop.html','../pages/shop.html','/pages/shop.html','/shop.html'];
+            else if (txt.includes('categories')) cands = ['pages/categories.html','categories.html','../categories.html','../pages/categories.html','/pages/categories.html','/categories.html'];
+            else if (txt.includes('contact')) cands = ['pages/contact.html','contact.html','../contact.html','../pages/contact.html','/pages/contact.html','/contact.html'];
+            else if (txt.includes('terms')) cands = ['pages/terms.html','terms.html','../terms.html','../pages/terms.html','/pages/terms.html','/terms.html'];
+            else if (txt.includes('privacy')) cands = ['pages/privacy.html','privacy.html','../privacy.html','../pages/privacy.html','/pages/privacy.html','/privacy.html'];
+            if (cands) pickExistingFoot(cands).then(found => { a.href = found; });
+          }
+        }catch(e){ console.warn('[footer] path fix failed', e); }
+      });
+  </script>
+  <script src="../js/header-links-fix.js"></script>
+</html>

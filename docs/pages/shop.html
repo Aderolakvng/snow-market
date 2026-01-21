@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snow Market — Shop</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/external-navbar.css">
+  <link rel="stylesheet" href="../css/external-products.css">
+  <link rel="stylesheet" href="../css/external-footer.css">
+</head>
+<body>
+  <div id="header"></div>
+
+  <div id="shopStatus" style="display:none; padding:12px; background:#fff4e5; border:1px solid #ffd9a8; margin:12px; border-radius:6px;"> <strong id="shopStatusTitle"></strong> <span id="shopStatusMsg" style="margin-left:8px;"></span> <button id="shopDiagBtn" class="btn" style="margin-left:12px;">Run Diagnostics</button></div>
+
+  <main class="container shop-page">
+    <section class="shop-hero">
+      <div class="shop-hero-inner">
+        <h1 class="page-title">Shop Phones</h1>
+        <p class="muted">Explore our curated selection of phones from Apple, Samsung and Nokia — 90 models ready to browse.</p>
+        <div class="shop-controls">
+          <input id="shopSearch" placeholder="Search models, brand, price..." />
+          <select id="brandFilter"><option value="All">All brands</option><option value="iPhone">iPhone</option><option value="Samsung">Samsung</option><option value="Nokia">Nokia</option></select>
+          <button id="refreshFirestoreBtn" class="btn" style="margin-left:12px;font-size:0.85rem;">Refresh</button>
+          <div style="margin-top:8px;"><small id="dataSource" class="muted"></small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="products container">
+      <h2 class="section-title">Featured Phones</h2>
+      <div class="grid-container" id="shopGrid"></div>
+    </section>
+  </main>
+
+  <div id="footer"></div>
+
+  <script>
+    // load header and footer and fix relative assets like other pages
+    (async function(){
+      // header
+      const headerHtml = await (await fetch('../components/header.html')).text();
+      document.getElementById('header').innerHTML = headerHtml;
+      // footer
+      const footerHtml = await (await fetch('../components/footer.html')).text();
+      document.getElementById('footer').innerHTML = footerHtml;
+
+      async function waitForGlobal(name, timeoutMs = 7000) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          if (typeof window[name] === 'function') return window[name];
+          await new Promise(r => setTimeout(r, 50));
+        }
+        return null;
+      }
+
+      // load products from Firebase directly
+      async function loadProducts(){
+        try{
+          // Prefer Firestore shop collection (fetchShopProducts), then local JSON
+          let data = [];
+          const fetchShop = window.fetchShopProducts || await waitForGlobal('fetchShopProducts', 6000);
+
+          // Helper: tolerant JSON parser (strips /* */ and // comments)
+          async function parseJsonResponse(res){
+            try{ return await res.json(); }catch(err){
+              try{ const txt = await res.text(); const cleaned = txt.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''); return JSON.parse(cleaned); }catch(e2){ throw e2; }
+            }
+          }
+
+          async function setSource(msg){ try{ const el = document.getElementById('dataSource'); if (el) el.textContent = msg || ''; }catch(e){} }
+
+          if (fetchShop) {
+            try{ const fromShop = await fetchShop(); if (Array.isArray(fromShop) && fromShop.length) { data = fromShop; setSource(`Loaded from Firestore (shop collection) (${fromShop.length})`); } } catch(e){ console.warn('[shop] fetchShopProducts failed', e); }
+          }
+
+          if (!data.length) {
+            // local fallback
+            const candidates = ['../data/products.json','data/products.json','/data/products.json','../data/products.json'];
+            try{
+              if (window.fetchFirstOk) {
+                const r = await window.fetchFirstOk(candidates);
+                if (r && r.ok) { data = await parseJsonResponse(r); setSource(`Loaded from local JSON (${Array.isArray(data)?data.length:0})`); }
+                else throw new Error('no products json');
+              } else if (typeof pickExisting === 'function') {
+                const found = await pickExisting(candidates);
+                if (found) {
+                  const r = await fetch(found).catch(()=>null);
+                  if (r && r.ok) data = await parseJsonResponse(r); else throw new Error('no products json');
+                  setSource(`Loaded from local JSON (${Array.isArray(data)?data.length:0})`);
+                } else throw new Error('no products json');
+              } else {
+                let ok = false;
+                for (const c of candidates) {
+                  try{ const r = await fetch(c); if (r && r.ok) { data = await parseJsonResponse(r); ok = true; break; } }catch(e){}
+                }
+                if (!ok) throw new Error('no products json');
+                setSource(`Loaded from local JSON (${Array.isArray(data)?data.length:0})`);
+              }
+            }catch(e){ throw new Error('no products json'); }
+          }
+          window.EXTERNAL_PRODUCTS_DATA = data;
+
+          // allow explicit refresh from Firestore via button
+          try{
+            const btn = document.getElementById('refreshFirestoreBtn');
+            if (btn && fetchShop) {
+              btn.addEventListener('click', async ()=>{
+                try{ btn.disabled = true; btn.textContent = 'Refreshing…'; const res = await fetchShop(); if (res && res.length) { window.shopRenderProducts ? window.shopRenderProducts(res) : renderGridFallback(res); setSource(`Loaded from Firestore (shop collection) (${res.length})`); } else { setSource('No products found in Firestore'); }
+                }catch(e){ console.error('[shop] refresh failed', e); setSource('Refresh failed — see console'); }
+                finally{ btn.disabled = false; setTimeout(()=>btn.textContent = 'Refresh', 500); }
+              });
+            }
+          }catch(e){}
+          // expose a quick debug/count + basic validation so it's obvious how many products loaded and if any are malformed
+          try{
+            const total = Array.isArray(data) ? data.length : 0;
+            console.debug('[shop] loaded products count=', total);
+            const st = document.querySelector('.section-title'); if (st && Array.isArray(data)) st.textContent = `Featured Phones (${total})`;
+            const invalid = (Array.isArray(data) ? data.filter(p => !p || !p.id || !p.title || (typeof p.price === 'undefined' || p.price === null)) : []);
+            if (invalid.length) console.warn(`[shop] ${invalid.length} product(s) missing id/title/price — first examples:`, invalid.slice(0,5));
+            if (!total) document.getElementById('shopGrid').innerHTML = '<div style="padding:24px">No products available — check <code>data/products.json</code></div>';
+          }catch(e){}
+
+          // if shopRenderProducts is ready, use it, otherwise render a simple grid
+          if (window.shopRenderProducts) {
+            window.shopRenderProducts(data);
+            // also populate categories sidebar if present
+            if (window.renderCategories) window.renderCategories(data);
+          } else {
+            renderGridFallback(data);
+          }
+
+          // attach search/filter handlers
+          const input = document.getElementById('shopSearch');
+          input.addEventListener('input', (e)=>{ filterAndRender(); });
+          const sel = document.getElementById('brandFilter');
+          sel.addEventListener('change', ()=>{ filterAndRender(); });
+
+          function filterAndRender(){
+            const q = (document.getElementById('shopSearch').value || '').toLowerCase().trim();
+            const brand = document.getElementById('brandFilter').value || 'All';
+            let filtered = data.slice();
+            if (brand !== 'All') {
+              const b = brand.toLowerCase();
+              filtered = filtered.filter(p => {
+                const pb = String(p.brand || p.subcategory || '').toLowerCase();
+                if (pb === b) return true;
+                if (b === 'iphone') {
+                  const t = String(p.title || p.name || '').toLowerCase();
+                  return pb.includes('apple') || pb.includes('iphone') || t.includes('iphone');
+                }
+                return false;
+              });
+            }
+            if (q) filtered = filtered.filter(p => (p.title||'').toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q) || (String(p.price||'')).includes(q));
+            if (window.shopRenderProducts) window.shopRenderProducts(filtered);
+            else renderGridFallback(filtered);
+          }
+
+        }catch(e){ console.error('[shop] failed to load products', e); document.getElementById('shopGrid').innerHTML = '<div style="padding:24px">No products available</div>'; }
+      }
+
+      function renderGridFallback(list){
+        const grid = document.getElementById('shopGrid'); if (!grid) return; grid.innerHTML = '';
+        if (!list || !list.length){ grid.innerHTML = '<div style="padding:24px">No products found</div>'; return; }
+        list.forEach(p=>{
+          const card = document.createElement('div'); card.className='product-card';
+          const img = window.getProductImage ? window.getProductImage(p.category, p.subcategory || p.subCategory) : (function(){ const rawImg = p.imageURL || 'images/products/placeholder.svg'; if (/^(https?:)?\/\//i.test(rawImg)) return rawImg; if (/^\//.test(rawImg)) return rawImg; if (/^(?:\.\.|\.|\.\/)/.test(rawImg)) return rawImg; const isPages = location.pathname.includes('/pages/'); return isPages ? `../${rawImg}` : rawImg; })();
+          card.setAttribute('data-id', p.id || '');
+          card.innerHTML = `<img src="${img}" alt="${p.title}" onerror="this.onerror=null; if(window.__tryImageFallback){ window.__tryImageFallback(this); } else { this.src=(window.resolveRoot?window.resolveRoot('images/products/placeholder.svg'):'images/products/placeholder.svg'); }" /><div class="product-body"><div class="product-title">${p.title}</div><div class="product-desc">${p.description}</div><div class="product-price">₦${Number(p.price||0).toFixed(2)}</div><button class="btn-add-cart btn" data-id="${p.id}" data-name="${String(p.title||'').replace(/\"/g,'&quot;')}" data-price="${Number(p.price||0)}" data-img="${img}">Add to cart</button></div>`;
+          grid.appendChild(card);
+        });
+      }
+
+      loadProducts();
+
+      // Diagnostics & UI banner for Firestore status
+      async function runDiagnostics(){
+        try{
+          if (window.showLoader) window.showLoader('Running diagnostics…', 'Checking Firestore connectivity');
+          const statusEl = document.getElementById('shopStatus'); const titleEl = document.getElementById('shopStatusTitle'); const msgEl = document.getElementById('shopStatusMsg');
+
+          // First, try SDK fetchAllProducts()
+          let sdkResult = null;
+          try{ sdkResult = window.fetchAllProducts ? await window.fetchAllProducts() : null; }catch(e){ sdkResult = null; }
+
+          if (sdkResult && sdkResult.length) {
+            if (statusEl) { statusEl.style.display='block'; titleEl.textContent = 'OK — Firestore products loaded'; msgEl.textContent = `Found ${sdkResult.length} product(s) via SDK.`; }
+            return;
+          }
+
+          // SDK returned no products — try a simple REST probe to determine reachability and auth
+          const proj = 'snow-market-baf05';
+          const probeUrl = `https://firestore.googleapis.com/v1/projects/${proj}/databases/(default)/documents?pageSize=1`;
+          try{
+            const r = await fetch(probeUrl, { method: 'GET' });
+            if (!r) throw new Error('No response');
+            if (r.status === 200) {
+              if (statusEl) { statusEl.style.display='block'; titleEl.textContent = 'No products in Firestore'; msgEl.textContent = 'Firestore is reachable but no product documents were found. Use the import script to populate products.'; }
+            } else if (r.status === 401 || r.status === 403) {
+              if (statusEl) { statusEl.style.display='block'; titleEl.textContent = 'Access denied'; msgEl.textContent = `Firestore returned ${r.status}. Check security rules or client auth.`; }
+            } else {
+              if (statusEl) { statusEl.style.display='block'; titleEl.textContent = 'Unexpected response'; msgEl.textContent = `Firestore probe returned status ${r.status}. See console for details.`; }
+            }
+          }catch(e){
+            if (statusEl) { statusEl.style.display='block'; titleEl.textContent = 'Network error'; msgEl.textContent = 'Could not reach firestore.googleapis.com — possible proxy/antivirus/TLS interception. Try another network or disable TLS inspection.'; }
+            console.warn('[shop] diagnostics fetch error', e);
+          }
+
+        }catch(e){ console.error('[shop] diagnostics failed', e); }
+        finally{ if (window.hideLoader) window.hideLoader(); }
+      }
+
+      try{ const diagBtn = document.getElementById('shopDiagBtn'); if (diagBtn) diagBtn.addEventListener('click', runDiagnostics); }catch(e){}
+
+      // Listen for Firestore load events to surface details to the banner
+      try{
+        window.addEventListener('productsLoadedFrom', (ev)=>{
+          const d = ev && ev.detail ? ev.detail : {};
+          const statusEl = document.getElementById('shopStatus'); const titleEl = document.getElementById('shopStatusTitle'); const msgEl = document.getElementById('shopStatusMsg');
+          if (!d || !statusEl) return;
+          if (d.source === 'firestore') { statusEl.style.display='block'; titleEl.textContent = 'Loaded from Firestore'; msgEl.textContent = `Found ${d.count || 0} product(s)`; }
+          else if (d.source === 'firestore-empty') { statusEl.style.display='block'; titleEl.textContent = 'No products in Firestore'; msgEl.textContent = 'Firestore is reachable but no products found. Run the import script to populate products.'; }
+          else if (d.source === 'error') { statusEl.style.display='block'; titleEl.textContent = 'Firestore error'; msgEl.textContent = `Error: ${d.error || d.reason || 'unknown'}`; }
+          else if (d.source === 'network_or_transport') { statusEl.style.display='block'; titleEl.textContent = 'Network/Transport error'; msgEl.textContent = 'Could not communicate with Firestore (network/proxy/TLS). Click Run Diagnostics.'; }
+        });
+      }catch(e){}
+
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('.btn-add-cart');
+        if (btn) {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-id');
+          const fromList = (window.EXTERNAL_PRODUCTS_DATA || []).find(p => String(p.id) === String(id));
+          const product = {
+            id,
+            title: btn.getAttribute('data-name') || (fromList && (fromList.title || fromList.name)) || '',
+            price: parseFloat(btn.getAttribute('data-price')) || (fromList && Number(fromList.price)) || 0,
+            imageURL: btn.getAttribute('data-img') || (fromList && (fromList.imageURL || fromList.image)) || ''
+          };
+          if (window.addToCart) window.addToCart(product);
+          return;
+        }
+
+        const card = e.target.closest && e.target.closest('.product-card');
+        if (card) {
+          const id = card.getAttribute('data-id') || (card.querySelector('.btn-add-cart') && card.querySelector('.btn-add-cart').getAttribute('data-id'));
+          if (id) window.location.href = `product-details.html?id=${encodeURIComponent(id)}`;
+        }
+      });
+
+      // fix header and footer links to working candidates for this pages/ context
+      try{
+        async function pickExisting(candidates){
+          for (const c of candidates){
+            const candidate = window.resolveRoot ? window.resolveRoot(c) : c;
+            try{ const r = await fetch(candidate, { method: 'HEAD' }); if (r && r.ok) return candidate; }catch(e){ try{ const r2 = await fetch(candidate); if (r2 && r2.ok) return candidate; }catch(e2){} }
+          }
+          return window.resolveRoot ? window.resolveRoot(candidates[0]) : candidates[0];
+        }
+
+        // header nav fix
+        const nav = document.getElementById('navMenu');
+        if (nav) {
+          const links = nav.querySelectorAll('a');
+          for (const a of links) {
+            const text = (a.textContent||'').trim().toLowerCase();
+            let candidates = [];
+            if (text.startsWith('home')) candidates = ['../index.html','index.html','/index.html'];
+            else if (text.startsWith('shop')) candidates = ['pages/shop.html','shop.html','../pages/shop.html','../shop.html','/pages/shop.html'];
+            else if (text.startsWith('categories')) candidates = ['pages/categories.html','categories.html','../pages/categories.html','../categories.html','/pages/categories.html'];
+            else if (text.startsWith('contact')) candidates = ['pages/contact.html','contact.html','../pages/contact.html','../contact.html','/pages/contact.html'];
+            if (candidates.length) pickExisting(candidates).then(found => { a.href = found; });
+          }
+        }
+
+        // footer link fix
+        const footer = document.getElementById('footer');
+        if (footer) {
+          const footerLinks = footer.querySelectorAll('a');
+          for (const a of footerLinks) {
+            const txt = (a.textContent||'').trim().toLowerCase();
+            let cands = null;
+            if (txt.includes('products') || txt.includes('all products')) cands = ['pages/shop.html','shop.html','../shop.html','../pages/shop.html','/pages/shop.html','/shop.html'];
+            else if (txt.includes('categories')) cands = ['pages/categories.html','categories.html','../categories.html','../pages/categories.html','/pages/categories.html','/categories.html'];
+            else if (txt.includes('contact')) cands = ['pages/contact.html','contact.html','../contact.html','../pages/contact.html','/pages/contact.html','/contact.html'];
+            else if (txt.includes('terms')) cands = ['pages/terms.html','terms.html','../terms.html','../pages/terms.html','/pages/terms.html','/terms.html'];
+            else if (txt.includes('privacy')) cands = ['pages/privacy.html','privacy.html','../privacy.html','../pages/privacy.html','/pages/privacy.html','/privacy.html'];
+            if (cands) pickExisting(cands).then(found => { a.href = found; });
+          }
+
+          // logo
+          const logoImg = footer.querySelector('.footer-logo');
+          if (logoImg) pickExisting(['../images/logo.svg','images/logo.svg','/images/logo.svg']).then(src => { logoImg.src = src; });
+        }
+      }catch(e){ console.warn('[shop] path fix failed', e); }
+
+    })();
+  </script>
+
+  <!-- external scripts that know how to render products if present -->
+  <script src="../js/firebase.js" type="module"></script>
+  <script src="../js/path-utils.js"></script>
+  <script src="../js/auth.js" type="module"></script>
+  <script src="../js/external-app.js"></script>
+  <script src="../js/firebase-products.js" type="module"></script>
+  <script src="../js/header-links-fix.js"></script>
+  <script src="../js/asset-logger.js"></script>
+</body>
+</html>
