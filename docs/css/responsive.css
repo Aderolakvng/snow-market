@@ -32,7 +32,6 @@
 
   .nav a {
     font-size: 15px;
-    
   }
 
   .logo {
@@ -41,20 +40,6 @@
 
   .logo a {
     font-size: 26px;
-  }
-
-  /* Ensure nav displays horizontally */
-  .nav {
-    display: flex;
-  }
-
-  .nav ul {
-    flex-direction: row;
-    flex-wrap: nowrap;
-  }
-
-  #menuToggle {
-    display: none;
   }
 
   .header {
@@ -69,10 +54,6 @@
     background: transparent !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-  }
-
-  .nav, .nav ul, .nav a {
-    background: transparent !important;
   }
 }
 
@@ -115,10 +96,6 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
-  .nav, .nav ul, .nav a {
-    background: transparent !important;
-  }
-
   .logo {
     font-size: 14px;
   }
@@ -129,23 +106,6 @@
 
   .nav a {
     font-size: 9px;
-    /* padding: 5px 5px;
-     */
-     margin-top: 28px;
-  }
-
-  .nav ul {
-    gap: 0px;
-    flex-wrap: nowrap;
-  }
-
-  /* Hide menu toggle and show nav fully */
-  #menuToggle {
-    display: none;
-  }
-
-  .nav {
-    display: flex;
   }
 }
 
@@ -204,9 +164,5 @@
   .nav ul {
     gap: 4px;
     flex-wrap: wrap;
-  }
-
-  .nav, .nav ul, .nav a {
-    background: transparent !important;
   }
 }
